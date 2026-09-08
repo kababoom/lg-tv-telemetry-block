@@ -48,18 +48,29 @@ Also noisy, and worth knowing about:
 - `nrdp.logs.netflix.com` / `nrdp.push.prod.netflix.com` — the Netflix app keeps a push
   channel open and ships logs **even while you are watching something else entirely**.
 
-### 3. It tries to route around your DNS filter
+### 3. It reaches public resolvers instead of the filtering one
 
-The TV sends DNS directly to hardcoded public resolvers (`1.1.1.1`, `8.8.8.8`) rather
-than the resolver handed out by DHCP. This matters more than the blocklist itself:
+The TV sent DNS straight to `1.1.1.1` and `8.8.8.8` rather than to the filtering resolver.
+This matters more than the blocklist itself:
 
 ```
 dig eic.api.lgtviot.com @<your-pihole>   ->  0.0.0.0        (blocked)
 dig eic.api.lgtviot.com @1.1.1.1         ->  18.239.50.37   (real address)
 ```
 
-A DNS blocklist alone is therefore **not** a control. Any device that ships its own
-resolver address walks straight past it.
+A DNS blocklist alone is therefore **not** a control. Any device that reaches another
+resolver walks straight past it.
+
+**Check your own DHCP before blaming the device.** I spent a while treating both addresses
+as hardcoded firmware behaviour. Then I read back my own DHCP configuration: the network
+was handing out the filtering resolver as primary and **`1.1.1.1` as secondary**. One of the
+two "bypasses" was not the TV going around me at all — it was the network formally offering
+it a way out, and the TV taking it. Only the second address was genuinely the device's own.
+
+A secondary DNS server pointing anywhere but your filter defeats the filter, because clients
+are free to use it whenever they like. If you run a filtering resolver, it should be the
+only one your DHCP advertises. The trade-off is real and worth stating: no fallback means no
+DNS at all while that resolver is down.
 
 ---
 
@@ -147,23 +158,33 @@ log, correctly denied.
 
 **On a consumer router/firewall, express this as a native policy instead** — raw `iptables`
 usually does not survive a reboot or a config re-provision. Scope the policy as *"from the
-TV, to the **internet zone**, port 53 and 853 → block"*. Do not block a specific public
-resolver address: this TV used two, and blocking one just moves the traffic to the other.
-Targeting the zone leaves the LAN path to your own resolver open and needs no maintenance
-when the next hardcoded address shows up.
+TV, to the **internet zone**, DNS/DoT/DoH → block"*. Do not block a specific public resolver
+address: this TV used two, and blocking one just moves the traffic to the other. Targeting
+the zone leaves the LAN path to your own resolver open and needs no maintenance when the
+next address shows up.
 
-I later replaced the hand-written rules with exactly such a policy — source scoped to the TV
-by MAC, destination zone *external*, matching the DNS / DoH / DoT application signatures — and
-then **removed my own rules to test it properly**. For 75 seconds the TV made no external DNS
-connection at all, while its queries kept arriving at the filtering resolver and being denied.
-So the native policy does take effect ahead of the interception, where my firewall rules did not.
+**But a zone-based policy cannot see traffic that has already been redirected.** That was
+the sting in the tail here. The interception was switched on by an *ad-blocking / content
+filtering* option on the network — a feature that works by capturing client DNS. With it
+enabled, the destination is rewritten to a local address before the policy is evaluated, so
+a rule saying "destination zone: external" never matches, and the firewall log cheerfully
+reports **Allow** for a connection to a public resolver. The log is not lying; the policy
+genuinely did not match.
+
+So if you run your own filtering resolver, turn the router's built-in DNS filtering **off**.
+It duplicates what your resolver already does, and while it is on it quietly outranks it.
 
 Scoping the source matters as much as the destination: a policy like this applied to *every*
 client would also cut off your own resolver's upstream lookups, and take the whole network's
 DNS down with it.
 
-And whichever way you do it — **verify with counters, not with the presence of the rule.**
-A loaded rule that never matches looks identical to a working one.
+And whichever way you do it — **verify with counters over time, not with a quiet moment.**
+I made exactly this mistake while writing this up: I removed my working rules to test the
+policy, watched for 75 seconds, saw no connections, and concluded the policy had taken over.
+It had not. I had flushed the connection table just before looking, and the device was in
+its retry backoff. Sampling again over two minutes showed the bypass alive and growing —
+73, then 80, then 131 packets. A rule at zero and a device that happens to be quiet look
+identical for exactly as long as you are willing to be fooled.
 
 ### Layer 3 — Optional: keep it off your LAN
 
