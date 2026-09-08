@@ -39,8 +39,17 @@ it is inventory of your home, built without asking.
 | `eic.tv.wiselg.com` | 14 | LG analytics |
 | `nl.info.lgsmartad.com` | 8 | **LG Smart Ad** |
 | `www.ueiwsp.com` | 64 | Universal Electronics (remote-control database) |
+| `prov-lg.alphonso.tv` | 4 | **Alphonso — an ACR vendor** |
+| `nl.elastic.lgwebostv.com` | 4 | log shipping |
+| `eic.nudge.lgtvcommon.com` | 4 | promotional "nudges" |
+| `nl.lgrecommends.lgappstv.com` | 4 | recommendation service |
 
 Replace `nl.` with your own country prefix.
+
+The low-volume entries matter more than their counts suggest. **Alphonso is an
+automatic-content-recognition company** — the business of identifying what is on the screen.
+Four queries a day is not a lot of traffic, but it is not a service you want reachable, and
+it is the one I nearly missed by sorting the list by volume.
 
 Also noisy, and worth knowing about:
 
@@ -90,28 +99,51 @@ deliberate bypass of local DNS. That was enough for me to act.
 
 Three layers. The second one is the one people skip, and it is the one that matters.
 
-### Layer 1 — Block the telemetry domains
+### Layer 1 — Block the telemetry hosts
 
-Wildcards, so tomorrow's subdomain is covered too:
+**Block exact hostnames, not parent domains.** This is the correction I most want to pass on,
+because I got it wrong twice in one evening and both mistakes broke something.
+
+LG mixes telemetry and essential infrastructure under the same parent domains. A wildcard on
+`nextlgsdp.com` looks safe — "Smart Data Platform" reads like pure analytics — but the app
+store leans on those endpoints, and blocking them **broke app updates**. A wildcard on
+`wiselg.com` quietly took out `eic-ngfts.tv.wiselg.com`, which is a firmware and app download
+CDN sitting on the same domain as an analytics host. Neither failure was visible until
+something stopped working, and the second would only have surfaced at the next update.
+
+So, exact hosts:
 
 ```bash
-for d in lgtviot.com nextlgsdp.com lgsmartad.com wiselg.com ueiwsp.com; do
-  pihole deny --wild "$d"
-done
+pihole deny \
+  eic.api.lgtviot.com \
+  eic.lgtviot.com \
+  eic.tv.wiselg.com \
+  nl.info.lgsmartad.com \
+  www.ueiwsp.com \
+  prov-lg.alphonso.tv \
+  nl.elastic.lgwebostv.com \
+  eic.nudge.lgtvcommon.com \
+  nl.lgrecommends.lgappstv.com
 ```
 
-Optional extras, blocked as **exact** names so you do not break anything else:
+Optional extras:
 
 ```bash
 pihole deny discovery.meethue.com     # only if you have no Hue bridge
 pihole deny nrdp.logs.netflix.com     # Netflix logging; playback unaffected
 ```
 
-**Do not blanket-block `lgeapi.com`.** It appears to carry the app store and firmware
-updates. Blocking telemetry is good; blocking your own security updates is not.
+**Leave these alone** — they are the delivery path for the software on the device:
 
-Likewise, do not wildcard `netflix.com`. `nrdp.logs` is telemetry;
-`nrdp.push.prod.netflix.com` is the push channel that makes the app work.
+- `nextlgsdp.com` — the Content Store depends on it. Blocking it breaks app updates.
+- `ngfts.*` on any parent (`ngfts.lge.com`, `eic-ngfts.tv.wiselg.com`,
+  `ngfts.nextlgsdp.com`) — firmware and app download CDN.
+- `lgeapi.com` — app store and update API.
+- `nrdp.push.prod.netflix.com` — the push channel the Netflix app needs.
+
+Blocking telemetry is good; blocking your own security updates is not. The way to find out
+which is which is to read your resolver's query log for that device and look up each host,
+rather than reaching for the parent domain.
 
 ### Layer 2 — Force the TV through your resolver
 
@@ -199,7 +231,7 @@ integrations, so it is a genuine trade-off rather than a free win.
 Blocklist is biting — you want to see `denied` lines for the TV's address:
 
 ```bash
-grep -E "lgtviot|nextlgsdp|lgsmartad|wiselg|ueiwsp" /var/log/pihole/pihole.log | tail
+grep -E "lgtviot|lgsmartad|wiselg|ueiwsp|alphonso" /var/log/pihole/pihole.log | tail
 ```
 
 ```
@@ -223,7 +255,13 @@ Confirm you did not break the things you use:
 ```bash
 dig www.netflix.com @<your-pihole>              # must still resolve
 dig nrdp.push.prod.netflix.com @<your-pihole>   # must still resolve
+dig ngfts.lge.com @<your-pihole>                # firmware CDN
+dig nl.nextlgsdp.com @<your-pihole>             # app store
 ```
+
+Then actually **open the app store on the TV and install an update**. A blocklist that breaks
+software delivery will pass every DNS test you can think of and still leave the device
+unpatched — and you will not find out for months.
 
 ---
 
