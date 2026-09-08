@@ -34,6 +34,69 @@ and easy to observe.
 
 ---
 
+## Quick fix
+
+Order matters: **step 2 first**, or the rest is decoration.
+
+### 1. Pi-hole — block the telemetry hosts
+
+```bash
+pihole deny \
+  eic.api.lgtviot.com eic.lgtviot.com eic.tv.wiselg.com \
+  nl.info.lgsmartad.com www.ueiwsp.com \
+  prov-lg.alphonso.tv nl.elastic.lgwebostv.com \
+  eic.nudge.lgtvcommon.com nl.lgrecommends.lgappstv.com
+
+pihole deny --wild logs.netflix.com    # Netflix logging; numbered hosts, so wildcard
+pihole deny discovery.meethue.com      # only if you own no Hue bridge
+```
+
+⚠️ `nl.` and `eic.` are **region prefixes** — yours will differ. Read your resolver's query
+log for the TV rather than copying this list blindly.
+
+⚠️ **Do not** block `nextlgsdp.com`, `lgeapi.com`, anything `ngfts.*`, or
+`nrdp.push.prod.netflix.com`. That is the app store, the firmware CDN, and the Netflix push
+channel. Blocking them breaks updates — quietly, and you find out months later.
+
+### 2. UniFi — stop the gateway hijacking DNS
+
+*Settings → CyberSecure → Content Filtering* → **delete the rule** (mine was "Default /
+Ad Block / Always").
+
+While this exists, the gateway rewrites the whole subnet's port-53 traffic to its own
+resolver, which ignores your blocklist **and** makes every firewall policy below unmatchable.
+Pi-hole already does ad blocking, better.
+
+### 3. UniFi — check what DHCP hands out
+
+*Settings → Networks → \<your LAN\> → DHCP Name Server*. If there is a public resolver in
+there as secondary, every client may use it whenever it likes, and your filtering is optional.
+Point it at your own resolver only — or at a second *filtering* one, never a public one.
+
+### 4. UniFi — force the TV through your resolver
+
+*Settings → Policy Engine → Create Policy*:
+
+| Field | Value |
+|---|---|
+| Source Zone | Internal → **Device** → your TV |
+| Action | **Block** |
+| Destination Zone | External → **App** → `DNS`, `DNS over HTTPS`, `DNS over TLS` |
+
+Scope the source to the **device**. Applied to everything, this also cuts your own resolver's
+upstream lookups and takes the network's DNS down with it.
+
+### 5. Verify it actually fires
+
+```bash
+iptables-save -c | grep UBIOS_policy_src_clients     # leading [packets:bytes]
+```
+
+A non-zero counter is proof. An empty firewall log is not a failure — once the device settles
+on the resolver that answers, there is nothing left to block.
+
+---
+
 **Every privacy setting in the TV was already switched off.** Live Plus (ACR) off, ad
 tracking limited, user agreements for voice and personalised advertising withdrawn. It
 made no measurable difference to the traffic. That is the whole point of this write-up:
