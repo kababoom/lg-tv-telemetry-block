@@ -218,6 +218,25 @@ its retry backoff. Sampling again over two minutes showed the bypass alive and g
 73, then 80, then 131 packets. A rule at zero and a device that happens to be quiet look
 identical for exactly as long as you are willing to be fooled.
 
+**How it ended.** Once the router's DNS interception was switched off, the policy did work.
+The proof was not another quiet window — it was finding the rule the policy compiles down to
+and reading its packet counter:
+
+```
+-A ..._LAN_WAN_USER -m set --match-set ..._policy_src_clients_15 src \
+   -m dpi32 --cat-app 9,61 --cat-app 20,199 --cat-app 20,197 -j DROP
+                                    ^ 7 packets dropped
+```
+
+Seven packets, then nothing — because a device that finds one resolver dead settles on the
+one that answers. That is also why the firewall log stays almost empty afterwards, which
+looks like the rule is doing nothing. It is not: it is doing its job so well there is
+nothing left to log.
+
+Note also that the rule matches on **DPI application categories**, not on port numbers. That
+covers DoH on 443, which a port rule cannot — but it means the traffic has to be classified
+before it can be matched, so treat it as a strong filter rather than a hard wall.
+
 ### Layer 3 — Optional: keep it off your LAN
 
 Putting the TV on an isolated VLAN with internet access but no path to the rest of the
@@ -248,7 +267,12 @@ iptables -L FORWARD -n -v
 ```
 
 Traffic actually stopped (not just DNS) — resolve one of the endpoints and check the
-router's connection table for that address. Zero sessions is the goal.
+router's **connection table** for that address. Zero live sessions is the goal.
+
+Do that in the connection table rather than the firewall's flow list. A flow list shows
+recent history, so a destination you blocked minutes ago still appears there, marked
+*Allow*, from before the change — which reads alarmingly like the block failing. Live
+sessions are the honest measure of now.
 
 Confirm you did not break the things you use:
 
