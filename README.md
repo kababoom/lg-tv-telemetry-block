@@ -152,6 +152,16 @@ resolver address: this TV used two, and blocking one just moves the traffic to t
 Targeting the zone leaves the LAN path to your own resolver open and needs no maintenance
 when the next hardcoded address shows up.
 
+I later replaced the hand-written rules with exactly such a policy — source scoped to the TV
+by MAC, destination zone *external*, matching the DNS / DoH / DoT application signatures — and
+then **removed my own rules to test it properly**. For 75 seconds the TV made no external DNS
+connection at all, while its queries kept arriving at the filtering resolver and being denied.
+So the native policy does take effect ahead of the interception, where my firewall rules did not.
+
+Scoping the source matters as much as the destination: a policy like this applied to *every*
+client would also cut off your own resolver's upstream lookups, and take the whole network's
+DNS down with it.
+
 And whichever way you do it — **verify with counters, not with the presence of the rule.**
 A loaded rule that never matches looks identical to a working one.
 
@@ -198,8 +208,10 @@ dig nrdp.push.prod.netflix.com @<your-pihole>   # must still resolve
 
 ## Caveats, honestly
 
-- **DNS-over-HTTPS is not covered.** DoH rides on port 443 and is indistinguishable
-  from normal web traffic without deeper inspection. If a device moves to DoH, the
+- **DNS-over-HTTPS is only partly covered.** DoH rides on port 443 and is indistinguishable
+  from normal web traffic without deeper inspection. A firewall with application signatures
+  can match the well-known DoH providers — worth enabling — but that is a list of known
+  endpoints, not a closed door: anything not in it still passes. If a device moves to DoH, the
   tell is traffic continuing to the endpoint's IP addresses while your DNS log falls
   silent. The answer then is blocking by address, not by name.
 - **Raw firewall rules on appliance routers are usually not persistent.** Convert them
