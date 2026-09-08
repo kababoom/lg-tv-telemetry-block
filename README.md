@@ -10,6 +10,30 @@ audio being uploaded**, and I explain below why network measurement cannot show 
 way. What I could check was the rest of it — and the network scanning turned out to be real
 and easy to observe.
 
+## TL;DR
+
+- One LG webOS TV made **3,351 DNS queries in a day**, ran **2,169 reverse-DNS lookups**
+  enumerating the local network, and talked to LG telemetry, ad, and **ACR** endpoints —
+  with every privacy setting in the TV switched off. Those settings changed nothing.
+- **This does not prove audio is being uploaded.** All of it is TLS. Network measurement
+  shows *who* a device talks to, never *what* it sends. Anyone claiming otherwise from
+  metadata is overstating it.
+- **A DNS blocklist alone is not a control.** The TV reached public resolvers directly. You
+  have to force its DNS to your resolver at the firewall.
+- **Block exact hostnames, not parent domains.** A wildcard on `nextlgsdp.com` broke app
+  updates; one on `wiselg.com` silently blocked a firmware CDN. LG mixes telemetry and
+  software delivery under the same domains.
+- **Check what your own DHCP hands out.** Half my "the TV is bypassing me" story was the
+  network offering a public resolver as secondary DNS.
+- **Turn off your router's built-in DNS filtering** if you run your own resolver. On UniFi
+  (*CyberSecure → Content Filtering*) it hijacks the whole subnet's port-53 traffic to a
+  resolver that ignores your blocklist — and it had rewritten 703,000 packets here.
+- **Verify with packet counters, not with quiet moments.** A rule sitting downstream of that
+  hijack matches nothing and looks exactly like a rule that works. I got fooled by this
+  twice in one evening; both times are documented below.
+
+---
+
 **Every privacy setting in the TV was already switched off.** Live Plus (ACR) off, ad
 tracking limited, user agreements for voice and personalised advertising withdrawn. It
 made no measurable difference to the traffic. That is the whole point of this write-up:
