@@ -1,8 +1,14 @@
 # Blocking LG smart-TV telemetry at the network level
 
-Notes from measuring what my own LG webOS TV actually sends home — and how I stopped
-it — after reading yet another round of headlines about smart TVs uploading audio and
-scanning home networks.
+Notes from measuring what my own LG webOS TV actually sends home — and how I stopped it.
+
+The trigger was a Dutch report that LG sets appear to listen in and scan home networks:
+[LG smart-tv's lijken gebruikers af te luisteren en netwerken te scannen](https://tweakers.net/nieuws/251832/lg-smart-tvs-lijken-gebruikers-af-te-luisteren-en-netwerken-te-scannen.html)
+(Tweakers, in Dutch — itself a summary of earlier reporting). I have not verified that
+research and this write-up does not repeat its central claim: **nothing here demonstrates
+audio being uploaded**, and I explain below why network measurement cannot show that either
+way. What I could check was the rest of it — and the network scanning turned out to be real
+and easy to observe.
 
 **Every privacy setting in the TV was already switched off.** Live Plus (ACR) off, ad
 tracking limited, user agreements for voice and personalised advertising withdrawn. It
