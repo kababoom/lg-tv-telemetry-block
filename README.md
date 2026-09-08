@@ -206,6 +206,52 @@ genuinely did not match.
 So if you run your own filtering resolver, turn the router's built-in DNS filtering **off**.
 It duplicates what your resolver already does, and while it is on it quietly outranks it.
 
+#### On UniFi specifically
+
+This was a UniFi OS gateway (Cloud Gateway Max, Network 10.6.101), and the details are worth
+spelling out because the setting is not where you would look for it.
+
+**Where it lives:** *Settings → CyberSecure → Content Filtering*. Not under Security, not
+under the network itself — and the rule that caused all this was a single row named
+"Default", scope **Ad Block**, schedule Always. It had been enabled for over a year.
+
+**What it does under the hood**, visible over SSH to the gateway:
+
+```bash
+ipset list dnsfilter          # → the entire LAN subnet, e.g. 192.168.x.0/24
+iptables -t nat -L DNSFILTER -n -v
+#  DNAT  udp  match-set dnsfilter src  udp dpt:53  to:127.0.0.1:1053
+```
+
+Every client in that subnet has its outbound port-53 traffic rewritten to a resolver on the
+gateway. Ask that resolver directly and you can see it ignores your blocklist entirely:
+
+```bash
+dig <a-domain-you-blocked> @127.0.0.1 -p 1053    # → a real address
+```
+
+In my case that one rule had rewritten **703,000 DNS packets**. Deleting it removes the ipset
+and the DNAT chain outright — verify with the two commands above, they should come back empty.
+
+**Verifying a UniFi policy actually matches.** Policies compile down to iptables rules that
+match on ipsets, so the destination in the UI never appears literally in `iptables-save`.
+Find yours by the client set and read its counters:
+
+```bash
+iptables-save -c | grep UBIOS_policy_src_clients
+#  [7:203] -A UBIOS_LAN_WAN_USER -m set --match-set UBIOS_policy_src_clients_15 src \
+#          -m dpi32 --cat-app 9,61 --cat-app 20,199 --cat-app 20,197 -j DROP
+```
+
+The leading `[packets:bytes]` is the honest answer to "is this rule doing anything". Note the
+`dpi32` match: a policy scoped to *App → DNS / DNS over HTTPS / DNS over TLS* is a deep-packet
+match on application signatures, which is how it reaches DoH on 443 — and also why it depends
+on the traffic being classified first.
+
+One more UniFi-specific trap: the **Insights → Flows** list shows recent history, not live
+state. A destination you blocked ten minutes ago still sits there marked *Allow* from before
+the change. Check the gateway's connection table for live sessions instead.
+
 Scoping the source matters as much as the destination: a policy like this applied to *every*
 client would also cut off your own resolver's upstream lookups, and take the whole network's
 DNS down with it.
@@ -325,5 +371,6 @@ counter that should not have been zero.
 
 ---
 
-*Measured on an LG webOS TV in September 2026. Numbers are from one device on one
-network; your endpoints will differ by region and firmware.*
+*Measured on an LG webOS TV behind a UniFi Cloud Gateway Max with a Pi-hole resolver,
+September 2026. Numbers are from one device on one network; your endpoints will differ by
+region and firmware.*
