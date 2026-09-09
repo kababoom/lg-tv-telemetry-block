@@ -120,7 +120,30 @@ and trying to resolve a name for every host it finds.
 It did **not** open connections to those hosts. This is inventory, not intrusion — but
 it is inventory of your home, built without asking.
 
-### 2. It talks to telemetry and ad endpoints, constantly
+### 2. But it is not doing it around the clock
+
+Worth stating plainly, because it cuts against the alarmed version of this story: **the TV is
+completely silent while switched off.** Eight consecutive days from the resolver's database:
+
+```
+2026-08-26   night 00:00-07:00 = 0     day total 2811
+2026-08-27   night              = 0     day total 1589
+2026-08-28   night              = 0     day total 2053
+2026-09-05   night              = 0     day total 2359
+2026-09-06   night              = 0     day total 1505
+2026-09-07   night              = 0     day total 4201
+2026-09-09   night              = 0     day total  532
+```
+
+Not "a bit quieter" — exactly zero queries between midnight and 07:00, every night. All of the
+traffic below is tied to **use**, not to the clock. This set is not lying awake reporting on an
+empty room.
+
+That also means one setting is load-bearing: the *instant-on* / quick-start option keeps the
+network interface awake in standby. With it enabled, those zeroes would not be zeroes. The
+slow few seconds when switching on are the price of the silence.
+
+### 3. It talks to telemetry and ad endpoints, constantly
 
 | Domain | Queries/day | What it is |
 |---|---|---|
@@ -133,6 +156,7 @@ it is inventory of your home, built without asking.
 | `nl.info.lgsmartad.com` | 8 | **LG Smart Ad** |
 | `www.ueiwsp.com` | 64 | Universal Electronics (remote-control database) |
 | `prov-lg.alphonso.tv` | 4 | **Alphonso — an ACR vendor** |
+| `cloudapi.imrworldwide.com` | — | **Nielsen — audience measurement** |
 | `nl.elastic.lgwebostv.com` | 4 | log shipping |
 | `eic.nudge.lgtvcommon.com` | 4 | promotional "nudges" |
 | `nl.lgrecommends.lgappstv.com` | 4 | recommendation service |
@@ -144,13 +168,19 @@ automatic-content-recognition company** — the business of identifying what is 
 Four queries a day is not a lot of traffic, but it is not a service you want reachable, and
 it is the one I nearly missed by sorting the list by volume.
 
+Going further back through the resolver's own database turned up a second one:
+**`cloudapi.imrworldwide.com`, 1,600 queries — that is Nielsen**, the television
+audience-measurement company. So this set had contacted not one but two firms whose product
+is knowing what is being watched. Both were already blocked, one of them only incidentally by
+a general ad list.
+
 Also noisy, and worth knowing about:
 
 - `discovery.meethue.com` — the TV polling for a Philips Hue bridge. I do not own one.
 - `nrdp.logs.netflix.com` / `nrdp.push.prod.netflix.com` — the Netflix app keeps a push
   channel open and ships logs **even while you are watching something else entirely**.
 
-### 3. It reaches public resolvers instead of the filtering one
+### 4. It reaches public resolvers instead of the filtering one
 
 The TV sent DNS straight to `1.1.1.1` and `8.8.8.8` rather than to the filtering resolver.
 This matters more than the blocklist itself:
